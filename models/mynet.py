@@ -50,6 +50,21 @@ class ConvBlock1v1(nn.Module):
         return out
 
 
+class ConvBlock1v2(nn.Module):
+    def __init__(self, in_channel=3, pretrained_dict=None):
+        super(ConvBlock1v2, self).__init__()
+        self.conv1 = nn.Conv2d(in_channel, 8, 5)
+        self.bn1 = nn.BatchNorm2d(8)
+        self.conv2 = nn.Conv2d(8, 16, 5)
+        self.bn2 = nn.BatchNorm2d(16)
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = F.max_pool2d(out, 2)
+        out = F.relu(self.bn2(self.conv2(out)))
+        return out
+
+
 class ConvBlock2v1(nn.Module):
     def __init__(self, in_channel=16, out_channel=2, pretrained_dict=None):
         super(ConvBlock2v1, self).__init__()
@@ -64,6 +79,26 @@ class ConvBlock2v1(nn.Module):
         out = F.avg_pool2d(out, 24)
         out = out.view(out.size(0), -1)
         out = self.fc1(out)
+        return out
+
+
+class ConvBlock2v2(nn.Module):
+    def __init__(self, in_channel=32, out_channel=2, pretrained_dict=None):
+        super(ConvBlock2v2, self).__init__()
+        self.conv1 = nn.Conv2d(in_channel, 32, 5)
+        self.conv2 = nn.Conv2d(32, 32, 5)
+        self.fc1 = nn.Linear(32*1*1, 32)
+        self.fc2 = nn.Linear(32, out_channel)
+
+    def forward(self, x):
+        out = F.relu(self.conv1(x))
+        out = F.max_pool2d(out, 2)
+        out = F.relu(self.conv2(out))
+        out = F.adaptive_avg_pool2d(out, output_size=1)
+        out = out.view(out.size(0), -1)
+        out = F.relu(self.fc1(out))
+        out = F.dropout(out, p=0.5, training=self.training)
+        out = self.fc2(out)
         return out
 
 
@@ -133,9 +168,64 @@ class MyNetv2CIFAR(nn.Module):
         return out
 
 
+class MyNetv2Webface(nn.Module):
+    def __init__(self, pretrained_dict=None):
+        super(MyNetv2Webface, self).__init__()
+        self.rgb_conv_block = ConvBlock1v1(3)
+        self.ir_conv_block = ConvBlock1v1(1)
+        self.spd_block = SPDBlock()
+        self.conv_block = ConvBlock2v1(16, 2)
+
+        if pretrained_dict:
+            loaded_dict = torch.load(pretrained_dict)
+            model_dict = self.state_dict()
+            # print({k: v for k, v in loaded_dict.items() if k in model_dict.keys() and "fc1" not in k})
+            # print(loaded_dict)
+            # print(model_dict)
+            loaded_dict = {k: v for k, v in loaded_dict.items() if k in model_dict.keys()}  # and "fc1" not in k}
+            model_dict.update(loaded_dict)
+            self.load_state_dict(model_dict)
+
+    def forward(self, x):
+        # out = F.relu(self.conv1(x))
+        rgb_in = x[:, :3, :, :].clone()
+        ir_in = x[:, 0, :, :].unsqueeze(1).clone()
+        rgb_out = self.rgb_conv_block(rgb_in)
+        ir_out = self.ir_conv_block(ir_in)
+        out = self.spd_block(rgb_out, ir_out)
+        # out = self.conv_block(out)
+        out = self.conv_block(out)
+        return out
+
+
+class MyNetv3(nn.Module):
+    def __init__(self, pretrained_dict=None):
+        super(MyNetv3, self).__init__()
+        self.rgb_conv_block = ConvBlock1v2(3)
+        self.ir_conv_block = ConvBlock1v2(1)
+        self.spd_block = SPDBlock()
+        self.conv_block = ConvBlock2v2(16, 2)  # 10575
+
+        if pretrained_dict:
+            pretrained_dict = torch.load(pretrained_dict)
+            model_dict = self.state_dict()
+            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "fc1" not in k}
+            model_dict.update(pretrained_dict)
+            self.load_state_dict(model_dict)
+
+    def forward(self, x):
+        rgb_in = x[:, :3, :, :].clone()
+        ir_in = x[:, 3, :, :].unsqueeze(1).clone()
+        rgb_out = self.rgb_conv_block(rgb_in)
+        ir_out = self.ir_conv_block(ir_in)
+        out = self.spd_block(rgb_out, ir_out)
+        out = self.conv_block(out)
+        return out
+
+
 if __name__ == "__main__":
-    test_net = MyNetv2CIFAR(os.path.join(MODELS_DIR, "..", "pretrained", "MyNet_CIFAR10.pth"))
-    pretrained_dict = torch.load(os.path.join(MODELS_DIR, "..", "pretrained", "MyNet_CIFAR10.pth"))
+    test_net = MyNetv2CIFAR(os.path.join(MODELS_DIR, "..", "pretrained", "MyNetv2_CIFAR10.pth"))
+    pretrained_dict = torch.load(os.path.join(MODELS_DIR, "..", "pretrained", "MyNetv2_CIFAR10.pth"))
     test_dict = test_net.state_dict()
     for key in pretrained_dict.keys():
         if key in test_dict.keys():

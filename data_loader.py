@@ -6,6 +6,7 @@ import sys
 import pandas as pd
 import numpy as np
 from PIL import Image
+from torchvision.datasets import ImageFolder
 sys.path.append('./utils')
 UTILS_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -45,10 +46,15 @@ class CASIASURFDataset(data.dataset.Dataset):
 
 if __name__ == "__main__":
     # test
-    test_data = CASIASURFDataset(split="train")
-    #cv2.imread(os.path.join(test_data.root, test_data.df.iloc[idx]["color"]))
-    test_img = np.asarray(test_data[0][0])
-    print(test_img[:,:,3].shape)
+    # test_data = CASIASURFDataset(split="train")
+    # cv2.imread(os.path.join(test_data.root, test_data.df.iloc[idx]["color"]))
+    # test_img = np.asarray(test_data[0][0])
+    # print(test_img[:,:,3].shape)
     # print(test_data.df.groupby("is_real").count())
     # print(len(test_data))
     # print(test_data[0])
+
+    test_data = ImageFolder("/datasets/CASIA-WebFace/")
+    print(len(test_data))
+    print(test_data[494413][1])
+    # print(list(set([test_data[i][1] for i in range(494414)])))
